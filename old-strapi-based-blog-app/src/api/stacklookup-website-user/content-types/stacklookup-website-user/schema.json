@@ -1,0 +1,21 @@
+{
+  "kind": "collectionType",
+  "collectionName": "stacklookup_website_users",
+  "info": {
+    "singularName": "stacklookup-website-user",
+    "pluralName": "stacklookup-website-users",
+    "displayName": "Stacklookup_website_user"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "Email": {
+      "type": "email"
+    },
+    "Notify": {
+      "type": "boolean"
+    }
+  }
+}
