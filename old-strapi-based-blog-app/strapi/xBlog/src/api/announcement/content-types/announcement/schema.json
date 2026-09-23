@@ -1,0 +1,43 @@
+{
+  "kind": "collectionType",
+  "collectionName": "announcements",
+  "info": {
+    "singularName": "announcement",
+    "pluralName": "announcements",
+    "displayName": "Announcement",
+    "description": "Site-wide messages from admins, surfaced on the homepage hero."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 120
+    },
+    "body": {
+      "type": "text",
+      "required": true,
+      "maxLength": 500
+    },
+    "tag": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "ctaLabel": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "ctaUrl": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    }
+  }
+}

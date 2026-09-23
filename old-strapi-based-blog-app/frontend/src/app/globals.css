@@ -1,0 +1,1078 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── StackLookup brand palette ──────────────────────────────────────
+       Primary is the same vibrant green used on the login screen, so the
+       full app now reads as one coherent product. We keep `foreground`
+       near-black for high text contrast against the green accents. */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7%;
+
+    /* Brand green — matches the StackLookup login art (#00C853-ish).
+       Buttons, links, focus rings, badges, etc. inherit this. */
+    --primary: 145 80% 39%;
+    --primary-foreground: 0 0% 100%;
+    --brand: 145 80% 39%;
+    --brand-foreground: 0 0% 100%;
+    --brand-soft: 145 70% 95%;
+
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.5%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 145 70% 95%;
+    --accent-foreground: 145 80% 25%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 145 80% 39%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 0 0% 6%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 145 70% 48%;
+    --primary-foreground: 0 0% 7%;
+    --brand: 145 70% 48%;
+    --brand-foreground: 0 0% 7%;
+    --brand-soft: 145 40% 14%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 145 40% 14%;
+    --accent-foreground: 145 70% 70%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 145 70% 48%;
+  }
+}
+
+@layer base {
+  /* Smooth scroll + global anchor offset so TOC clicks (and any other in-page
+     anchor) land below the sticky navbar instead of being hidden behind it.
+     Doing it on `html` means every <a href="#…"> link gets the right offset
+     without any per-component scroll math. */
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 96px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  /* ── Global ambient backdrop ───────────────────────────────────────────
+     Three fixed layers below the page that travel with scroll, giving the
+     whole product a subtle, professional "depth" feel without distracting
+     from content:
+
+       1. body itself — flat brand-tinted off-white
+       2. ::before     — soft brand radial glows anchored to viewport corners
+                         + an interactive spotlight that follows the cursor
+                         (driven by --mx / --my, set in layout.tsx)
+       3. ::after      — faint engineering grid overlay, masked so it fades
+                         toward the edges
+
+     Both pseudo-layers are `position: fixed` and `pointer-events: none`,
+     so they never intercept clicks and they stay locked in place while
+     the user scrolls. */
+  body {
+    @apply text-foreground;
+    background-color: hsl(var(--background));
+    position: relative;
+  }
+
+  body::before,
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  /* The cursor spotlight sits in ::before; ::after carries the engineering
+     grid; the new layered aurora blobs live on a dedicated `.bg-aurora`
+     element rendered by <BackgroundScene>. */
+  body::before {
+    background:
+      /* Cursor spotlight — follows the pointer (set by CursorSpotlight.tsx) */
+      radial-gradient(
+        700px circle at var(--mx, 30%) var(--my, 20%),
+        hsl(var(--brand) / 0.16),
+        transparent 60%
+      );
+    transition: background-position 0.3s ease;
+  }
+
+  body::after {
+    background-image:
+      linear-gradient(to right, hsl(var(--foreground) / 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / 0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    -webkit-mask-image: radial-gradient(ellipse at center, black 35%, transparent 80%);
+    mask-image: radial-gradient(ellipse at center, black 35%, transparent 80%);
+    opacity: 0.5;
+  }
+
+  .dark body::before {
+    background:
+      radial-gradient(
+        700px circle at var(--mx, 30%) var(--my, 20%),
+        hsl(var(--brand) / 0.22),
+        transparent 60%
+      );
+  }
+
+  .dark body::after {
+    background-image:
+      linear-gradient(to right, hsl(0 0% 100% / 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(0 0% 100% / 0.04) 1px, transparent 1px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body::before { transition: none; }
+  }
+}
+
+/* ── Ambient aurora background ──────────────────────────────────────────
+   Five overlapping brand-green orbs that drift independently around the
+   viewport, blending to create a soft "aurora" effect. The wrapper is
+   `position: fixed inset-0 -z-10 pointer-events-none` so it never
+   intercepts clicks and stays glued to the viewport during scroll.
+
+   Each orb has its own drift keyframe with a different duration + delay
+   so they never cycle in lockstep — the resulting motion always feels
+   organic and never repetitive.
+*/
+.bg-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  overflow: hidden;
+  isolation: isolate; /* keep the mix-blend-mode contained */
+}
+.bg-aurora-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.bg-aurora-orb-1 {
+  width: 520px; height: 520px;
+  top: -160px; left: -120px;
+  background: radial-gradient(circle, hsl(var(--brand) / 0.55), transparent 70%);
+  animation: aurora-drift-1 22s ease-in-out infinite alternate;
+}
+.bg-aurora-orb-2 {
+  width: 460px; height: 460px;
+  top: 30%; right: -100px;
+  background: radial-gradient(circle, hsl(160 70% 60% / 0.50), transparent 70%);
+  animation: aurora-drift-2 28s ease-in-out infinite alternate;
+}
+.bg-aurora-orb-3 {
+  width: 600px; height: 600px;
+  bottom: -200px; left: 20%;
+  background: radial-gradient(circle, hsl(180 60% 60% / 0.40), transparent 70%);
+  animation: aurora-drift-3 32s ease-in-out infinite alternate;
+}
+.bg-aurora-orb-4 {
+  width: 380px; height: 380px;
+  top: 10%; left: 40%;
+  background: radial-gradient(circle, hsl(140 80% 55% / 0.35), transparent 70%);
+  animation: aurora-drift-4 26s ease-in-out infinite alternate;
+}
+.bg-aurora-orb-5 {
+  width: 440px; height: 440px;
+  bottom: 5%; right: 25%;
+  background: radial-gradient(circle, hsl(170 75% 55% / 0.40), transparent 70%);
+  animation: aurora-drift-5 30s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift-1 {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(180px, 90px) scale(1.15); }
+}
+@keyframes aurora-drift-2 {
+  0%   { transform: translate(0, 0) scale(1.05); }
+  100% { transform: translate(-160px, 70px) scale(0.9); }
+}
+@keyframes aurora-drift-3 {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(120px, -140px) scale(1.1); }
+}
+@keyframes aurora-drift-4 {
+  0%   { transform: translate(0, 0) scale(1.1); }
+  100% { transform: translate(-140px, 120px) scale(0.95); }
+}
+@keyframes aurora-drift-5 {
+  0%   { transform: translate(0, 0) scale(0.95); }
+  100% { transform: translate(80px, -100px) scale(1.15); }
+}
+
+/* The orbs also get a soft brand-coloured pull toward the cursor, courtesy
+   of `--mx` / `--my` (set by <CursorSpotlight />). Interactive without any
+   per-orb JavaScript. */
+.bg-aurora-cursor {
+  position: absolute;
+  width: 640px;
+  height: 640px;
+  left: var(--mx, 50%);
+  top: var(--my, 50%);
+  margin: -320px 0 0 -320px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, hsl(var(--brand) / 0.22), transparent 70%);
+  filter: blur(60px);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  transition: left 0.4s cubic-bezier(0.22, 1, 0.36, 1), top 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Floating dust particles drifting upward — each uses a different delay so
+   the field never feels mechanical. */
+.bg-aurora-dust {
+  position: absolute;
+  border-radius: 9999px;
+  background: hsl(var(--brand) / 0.45);
+  box-shadow: 0 0 8px hsl(var(--brand) / 0.6), 0 0 16px hsl(var(--brand) / 0.35);
+  opacity: 0;
+  animation: aurora-dust 14s linear infinite;
+}
+.bg-aurora-dust-1 { left: 10%; width: 3px; height: 3px; animation-delay: 0s;    }
+.bg-aurora-dust-2 { left: 25%; width: 2px; height: 2px; animation-delay: -3s;   }
+.bg-aurora-dust-3 { left: 40%; width: 4px; height: 4px; animation-delay: -7s;   }
+.bg-aurora-dust-4 { left: 55%; width: 2px; height: 2px; animation-delay: -10s;  }
+.bg-aurora-dust-5 { left: 70%; width: 3px; height: 3px; animation-delay: -1.5s; }
+.bg-aurora-dust-6 { left: 85%; width: 2px; height: 2px; animation-delay: -5s;   }
+.bg-aurora-dust-7 { left: 92%; width: 3px; height: 3px; animation-delay: -9s;   }
+@keyframes aurora-dust {
+  0%   { transform: translateY(110vh) translateX(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(-10vh) translateX(40px); opacity: 0; }
+}
+
+/* Light wash behind the aurora — keeps the page readable on top of all
+   the colour. Sits BETWEEN the orbs and the page content. */
+.bg-aurora-wash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top, transparent 0%, hsl(var(--background) / 0.45) 60%, hsl(var(--background) / 0.85) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-aurora-orb,
+  .bg-aurora-dust,
+  .bg-aurora-cursor { animation: none !important; transition: none !important; }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Hide the horizontal scrollbar on the home page's tag-chip strip while
+     keeping it scrollable with touch/wheel. */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Brand utilities so any component (card, badge, link) can opt into the
+     StackLookup green without re-declaring HSL values inline. */
+  .bg-brand { background-color: hsl(var(--brand)); }
+  .bg-brand-soft { background-color: hsl(var(--brand-soft)); }
+  .text-brand { color: hsl(var(--brand)); }
+  .text-brand-foreground { color: hsl(var(--brand-foreground)); }
+  .border-brand { border-color: hsl(var(--brand)); }
+  .ring-brand { --tw-ring-color: hsl(var(--brand)); }
+
+  /* Faint repeating grid for hero backdrops — adds a subtle "engineering"
+     texture without competing with content. Pairs with brand-soft. */
+  .bg-grid-faint {
+    background-image:
+      linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* Soft brand glow used behind the hero illustration. */
+  .bg-brand-radial {
+    background:
+      radial-gradient(circle at 25% 30%, hsl(var(--brand) / 0.18), transparent 55%),
+      radial-gradient(circle at 80% 20%, hsl(var(--brand) / 0.10), transparent 50%),
+      radial-gradient(circle at 60% 90%, hsl(var(--brand) / 0.12), transparent 55%);
+  }
+}
+
+/* ── Cinematic Welcome / Goodbye animation ─────────────────────────────
+   A premium top-centre pop-up sequence over a single ~4.2s timeline:
+
+     1. CLOUD BLOOM  — soft floating island/cloud blurs into existence
+     2. PLANE PEEK   — paper plane emerges from behind the cloud
+     3. POPUP BLOOM  — message popup blooms in, plane slips behind it
+     4. PLANE ORBIT  — plane re-emerges from BOTTOM, flies diagonally to
+                       top-right, circles BEHIND the popup
+     5. RE-ENTRY     — plane briefly disappears, reappears from the same
+                       entry direction
+     6. GLOW WRAP    — plane circles all the way around the popup, popup
+                       gains a brand-green glow ring
+     7. DISSOLVE     — popup, cloud, particles, plane all fade & fly off
+                       into the sky with motion blur
+
+   All sub-elements run independent keyframes that share the same total
+   duration, so the choreography stays in sync without JS scheduling. */
+.wi-scene {
+  position: relative;
+  display: inline-block;
+  width: 340px;
+  height: 96px;
+  pointer-events: none;
+  /* Lift the whole stage so the popup sits closer to the top edge —
+     compounded with the Toaster's reduced `top: 16` this puts the pill
+     near the top of the viewport where it reads like a sky drop-in. */
+  margin-top: -4px;
+}
+
+/* ── Ambient cloud / floating island ─────────────────────────────── */
+.wi-cloud {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 200px;
+  height: 64px;
+  transform: translateX(-50%);
+  opacity: 0;
+  z-index: 0;
+  animation: wi-cloud 4200ms ease-out forwards;
+}
+.wi-cloud-blob {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
+  filter: blur(10px);
+}
+.wi-cloud-blob-1 { width: 90px; height: 56px; top: 6px;  left: 12px; }
+.wi-cloud-blob-2 { width: 110px; height: 64px; top: -2px; left: 60px; }
+.wi-cloud-blob-3 { width: 80px; height: 52px; top: 8px;  right: 8px; }
+@keyframes wi-cloud {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(0.55); filter: blur(10px); }
+  8%   { opacity: 0.85; transform: translateX(-50%) translateY(-4px) scale(0.92); filter: blur(2px); }
+  14%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); filter: blur(0); }
+  /* Gentle idle bob — peaks gently at three points, never spikes */
+  28%  { transform: translateX(-50%) translateY(-3px) scale(1.01); }
+  45%  { transform: translateX(-50%) translateY(0) scale(1); }
+  62%  { transform: translateX(-50%) translateY(-3px) scale(1.01); }
+  78%  { transform: translateX(-50%) translateY(0) scale(1); }
+  88%  { opacity: 1; transform: translateX(-50%) translateY(-2px) scale(0.98); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-36px) scale(0.5); filter: blur(18px); }
+}
+
+/* ── Floating particles ─────────────────────────────────────────── */
+.wi-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: hsl(var(--brand));
+  box-shadow: 0 0 8px hsl(var(--brand)), 0 0 14px hsl(var(--brand) / 0.5);
+  opacity: 0;
+}
+.wi-particle-1 { top: 14px; left: 70px;  animation: wi-particle 4200ms 200ms ease-out forwards; }
+.wi-particle-2 { top: 26px; left: 240px; animation: wi-particle 4200ms 500ms ease-out forwards; }
+.wi-particle-3 { top: 52px; left: 90px;  animation: wi-particle 4200ms 700ms ease-out forwards; }
+.wi-particle-4 { top: 20px; left: 200px; animation: wi-particle 4200ms 350ms ease-out forwards; }
+@keyframes wi-particle {
+  0%, 5%   { opacity: 0; transform: translateY(0); }
+  15%      { opacity: 0.9; }
+  70%      { opacity: 0.6; transform: translateY(-10px); }
+  100%     { opacity: 0; transform: translateY(-30px); }
+}
+
+/* ── Paper plane — full timeline ─────────────────────────────────
+   Smoothed trajectory: curves replace straight lines, intermediate keys
+   between major waypoints prevent any abrupt change-of-direction snap,
+   and rotation eases smoothly throughout so the plane "banks" into
+   each turn like a real aircraft would. */
+.wi-plane {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  color: hsl(var(--brand));
+  filter:
+    drop-shadow(0 0 8px hsl(var(--brand) / 0.9))
+    drop-shadow(0 0 18px hsl(var(--brand) / 0.5));
+  opacity: 0;
+  z-index: 3;
+  /* Smoother easing curve — gentle ease-in, fluid middle, gentle ease-out. */
+  animation: wi-plane 4200ms cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+}
+@keyframes wi-plane {
+  /* Hidden behind cloud */
+  0%   { transform: translate(-80px, -28px) rotate(-32deg) scale(0.4); opacity: 0; }
+  /* Peeks from behind the cloud */
+  5%   { transform: translate(-64px, -22px) rotate(-28deg) scale(0.55); opacity: 0.7; }
+  8%   { transform: translate(-50px, -18px) rotate(-22deg) scale(0.65); opacity: 0.9; }
+  /* Glides forward toward the popup centre with a gentle arc */
+  13%  { transform: translate(-32px, -10px) rotate(-12deg) scale(0.82); opacity: 1; }
+  17%  { transform: translate(-14px, -4px) rotate(-4deg) scale(0.94); opacity: 1; }
+  20%  { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  /* Slips BEHIND popup — fades to invisible at centre */
+  24%  { transform: translate(8px, 2px) rotate(14deg) scale(0.86); opacity: 0.55; }
+  27%  { transform: translate(12px, 4px) rotate(24deg) scale(0.78); opacity: 0; }
+
+  /* Re-emerges from BOTTOM of popup */
+  33%  { transform: translate(2px, 26px) rotate(165deg) scale(0.8); opacity: 0.8; }
+  36%  { transform: translate(0, 32px) rotate(150deg) scale(0.9); opacity: 1; }
+  /* Curves diagonally up to TOP-RIGHT corner via an arc */
+  40%  { transform: translate(60px, 4px) rotate(80deg) scale(0.95); opacity: 1; }
+  44%  { transform: translate(120px, -30px) rotate(42deg) scale(1); opacity: 1; }
+  /* Banks around to the right side, slips BEHIND */
+  48%  { transform: translate(150px, -6px) rotate(95deg) scale(0.92); opacity: 1; }
+  52%  { transform: translate(150px, 18px) rotate(140deg) scale(0.85); opacity: 0.6; }
+  55%  { transform: translate(140px, 30px) rotate(170deg) scale(0.78); opacity: 0; }
+
+  /* Brief pause — plane hidden */
+  60%  { transform: translate(-80px, -28px) rotate(-32deg) scale(0.45); opacity: 0; }
+  /* Reappears from the original entry direction */
+  64%  { transform: translate(-60px, -22px) rotate(-28deg) scale(0.7); opacity: 0.85; }
+  67%  { transform: translate(-36px, -18px) rotate(-18deg) scale(0.88); opacity: 1; }
+
+  /* Wrap motion — one full clockwise loop around the popup with
+     intermediate waypoints so curves stay round, not octagonal. */
+  71%  { transform: translate(-20px, -34px) rotate(20deg) scale(1); opacity: 1; }
+  75%  { transform: translate(60px, -36px) rotate(70deg) scale(1); opacity: 1; }
+  79%  { transform: translate(140px, -32px) rotate(110deg) scale(1); opacity: 1; }
+  82%  { transform: translate(160px, 0) rotate(160deg) scale(1); opacity: 1; }
+  85%  { transform: translate(150px, 28px) rotate(200deg) scale(1); opacity: 1; }
+  88%  { transform: translate(60px, 34px) rotate(250deg) scale(1); opacity: 1; }
+  91%  { transform: translate(-20px, 28px) rotate(290deg) scale(1); opacity: 1; }
+  94%  { transform: translate(-30px, -8px) rotate(330deg) scale(0.95); opacity: 1; }
+
+  /* Dissolves into the sky with motion blur */
+  100% {
+    transform: translate(40px, -180px) rotate(0deg) scale(0.25);
+    opacity: 0;
+    filter:
+      drop-shadow(0 0 4px hsl(var(--brand) / 0.4))
+      blur(8px);
+  }
+}
+
+/* ── Popup pill ──────────────────────────────────────────────────── */
+.wi-popup {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 20px;
+  background: rgba(15, 23, 42, 0.92);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 14px 35px rgba(2, 6, 23, 0.35),
+    0 0 0 1px rgba(16, 185, 129, 0.10) inset;
+  opacity: 0;
+  transform: translateX(-50%) scale(0.4);
+  filter: blur(6px);
+  z-index: 2;
+  transform-origin: center;
+  animation:
+    wi-popup-bloom 4200ms cubic-bezier(0.34, 1.1, 0.5, 1) forwards,
+    wi-popup-glow 4200ms ease forwards;
+}
+@keyframes wi-popup-bloom {
+  0%, 14%  { opacity: 0; transform: translateX(-50%) scale(0.4); filter: blur(6px); }
+  22%      { opacity: 1; transform: translateX(-50%) scale(1.06); filter: blur(0); }
+  28%      { opacity: 1; transform: translateX(-50%) scale(1); filter: blur(0); }
+  88%      { opacity: 1; transform: translateX(-50%) scale(1); filter: blur(0); }
+  100%     { opacity: 0; transform: translateX(-50%) translateY(-42px) scale(0.7); filter: blur(8px); }
+}
+/* Brand-green glow ring eases in during the wrap phase (~70%–92%),
+   pulses at full strength as the plane completes its loop, then eases
+   out as the popup dissolves. */
+@keyframes wi-popup-glow {
+  0%, 68%  {
+    box-shadow:
+      0 14px 35px rgba(2, 6, 23, 0.35),
+      0 0 0 1px rgba(16, 185, 129, 0.10) inset;
+  }
+  74%      {
+    box-shadow:
+      0 14px 35px rgba(2, 6, 23, 0.35),
+      0 0 0 1.5px hsl(var(--brand) / 0.6),
+      0 0 18px hsl(var(--brand) / 0.35),
+      0 0 0 1px rgba(16, 185, 129, 0.10) inset;
+  }
+  82%      {
+    box-shadow:
+      0 14px 35px rgba(2, 6, 23, 0.35),
+      0 0 0 2.5px hsl(var(--brand)),
+      0 0 34px hsl(var(--brand) / 0.65),
+      0 0 0 1px rgba(16, 185, 129, 0.15) inset;
+  }
+  92%      {
+    box-shadow:
+      0 14px 35px rgba(2, 6, 23, 0.35),
+      0 0 0 2px hsl(var(--brand) / 0.8),
+      0 0 22px hsl(var(--brand) / 0.45);
+  }
+  100%     {
+    box-shadow:
+      0 14px 35px rgba(2, 6, 23, 0.10),
+      0 0 0 1px rgba(16, 185, 129, 0) inset;
+  }
+}
+
+.wi-popup-text {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  animation: wi-text 4200ms ease forwards;
+}
+.wi-popup-text strong {
+  color: hsl(var(--brand));
+  font-weight: 600;
+}
+@keyframes wi-text {
+  0%, 18%  { max-width: 0; opacity: 0; }
+  28%      { max-width: 320px; opacity: 1; }
+  88%      { max-width: 320px; opacity: 1; }
+  100%     { max-width: 0; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wi-scene * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ── Legacy ".welcome-*" classes — kept temporarily as no-ops in case
+   any old toast.custom() callers are still pointing at them. New scene
+   uses the .wi-* classes above. ──────────────────────────────────── */
+.welcome-wrap {
+  position: relative;
+  display: inline-block;
+  pointer-events: none;
+}
+.welcome-plane {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  color: hsl(var(--brand));
+  filter: drop-shadow(0 0 12px hsl(var(--brand) / 0.75));
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0; /* default — keyframes drive visibility */
+}
+.welcome-wrap-entering .welcome-plane {
+  animation: plane-drop-deliver 1100ms cubic-bezier(0.34, 0.9, 0.5, 1) forwards;
+}
+.welcome-wrap-exiting .welcome-plane {
+  animation: plane-rise-acw 1050ms cubic-bezier(0.5, 0, 0.6, 1) forwards;
+}
+/* During HOLD the plane is hidden — `opacity: 0` is already the default. */
+
+.welcome-island {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 18px 6px 6px;
+  background: rgba(15, 23, 42, 0.96); /* slate-900 */
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  box-shadow: 0 14px 35px rgba(2, 6, 23, 0.35), 0 0 0 1px rgba(16, 185, 129, 0.10) inset;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  /* `hidden` so the text-reveal max-width animation crops the message
+     cleanly as the pill grows. */
+  overflow: hidden;
+  transform-origin: center;
+  /* Pill is invisible at first — bloom-in keyframes spawn it once the
+     plane has reached the centre. */
+  opacity: 0;
+  transform: scale(0);
+}
+.welcome-wrap-entering .welcome-island {
+  animation: island-bloom-in 700ms 380ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.welcome-wrap-hold .welcome-island {
+  opacity: 1;
+  transform: scale(1);
+}
+.welcome-wrap-exiting .welcome-island {
+  opacity: 1;
+  transform: scale(1);
+  animation: island-shrink-out 850ms 180ms cubic-bezier(0.55, 0, 0.7, 0.2) forwards;
+}
+
+/* Landing pad — a soft brand-tinted halo where the plane ends up after
+   delivering the message. No longer a track; the plane flies a wide arc
+   across the pill rather than orbiting this dot. */
+.welcome-island .orbit-zone {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 50%, hsl(var(--brand) / 0.30) 0%, transparent 70%);
+  overflow: visible;
+}
+
+/* (Plane rules moved up to `.welcome-plane` which lives on the wrapper,
+   not inside the pill — keeps the plane in its own coordinate space so
+   it can fly above/around the pill cleanly.) */
+
+/* Text reveals AFTER the pill has bloomed in (delay = bloom-in's 380ms
+   start + ~500ms into its bloom). Shrinks on exit. */
+.welcome-text {
+  display: inline-block;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+}
+.welcome-wrap-entering .welcome-text {
+  animation: text-in 550ms 880ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.welcome-wrap-hold .welcome-text {
+  max-width: 280px;
+  opacity: 1;
+}
+.welcome-wrap-exiting .welcome-text {
+  max-width: 280px;
+  opacity: 1;
+  animation: text-out 360ms cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+.welcome-island .welcome-text strong {
+  color: hsl(var(--brand));
+  font-weight: 600;
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────────
+   Stage 1 — pop-up blooms into existence behind the diving plane.
+   Starts at scale(0); when the plane has reached pill centre at
+   ~T=400ms, the pill expands from nothing to full size. */
+@keyframes island-bloom-in {
+  0% {
+    opacity: 0;
+    transform: scale(0) translateY(0);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06) translateY(0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+/* Stage 4 — pop-up shrinks away as the plane carries it upward. */
+@keyframes island-shrink-out {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(0.92) translateY(-6px);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0) translateY(-40px);
+    filter: blur(4px);
+  }
+}
+
+/* Stage 1 — plane drops straight down from above, dives into pill centre,
+   slips behind the pill (z-index → -1) and fades out. */
+@keyframes plane-drop-deliver {
+  0% {
+    transform: translate(0, -140px) rotate(-90deg) scale(0.7);
+    opacity: 0;
+    z-index: 2;
+  }
+  15% {
+    opacity: 1;
+  }
+  40% {
+    transform: translate(0, -10px) rotate(-90deg) scale(1.1);
+    opacity: 1;
+    z-index: 2;
+  }
+  65% {
+    transform: translate(0, 0) rotate(-60deg) scale(0.9);
+    opacity: 1;
+    z-index: -1;
+  }
+  100% {
+    transform: translate(0, 0) rotate(-30deg) scale(0.6);
+    opacity: 0;
+    z-index: -1;
+  }
+}
+
+/* Stage 3 — plane re-emerges from the pill, spirals anti-clockwise upward
+   off-screen. The pill shrinks underneath it (Stage 4 above). */
+@keyframes plane-rise-acw {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(0.6);
+    opacity: 0;
+    z-index: 2;
+  }
+  15% {
+    transform: translate(0, -10px) rotate(-20deg) scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: translate(-32px, -40px) rotate(-110deg) scale(1.05);
+    opacity: 1;
+  }
+  70% {
+    transform: translate(-10px, -90px) rotate(-220deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(20px, -150px) rotate(-340deg) scale(0.7);
+    opacity: 0;
+  }
+}
+/* Wide delivery arc — plane comes in from the upper-left (off-pill),
+   sweeps across the pop-up, dips slightly, and lands centered on the
+   landing pad. Tilt rotates with the trajectory so the plane "banks"
+   into the curve. */
+@keyframes plane-deliver {
+  0% {
+    transform: translate(-160px, -34px) rotate(-30deg) scale(0.55);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  45% {
+    transform: translate(110px, -16px) rotate(18deg) scale(1.15);
+  }
+  75% {
+    transform: translate(40px, 6px) rotate(-6deg) scale(1.05);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes text-in {
+  from { max-width: 0;     opacity: 0; }
+  to   { max-width: 280px; opacity: 1; }
+}
+@keyframes text-out {
+  from { max-width: 280px; opacity: 1; }
+  to   { max-width: 0;     opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-island,
+  .welcome-plane,
+  .welcome-text {
+    animation-duration: 0.001ms !important;
+  }
+}
+
+/* ── Article reading polish ─────────────────────────────────────────────
+   Text selection picks up the brand green so highlighting feels native to
+   the product. Applied globally — the brand-soft / emerald-900 pair has
+   strong contrast in both modes. */
+::selection {
+  background: hsl(var(--brand) / 0.30);
+  color: inherit;
+}
+
+/* Drop-cap on the first paragraph of an article body. Opt-in via the
+   `.article-body` class so it doesn't accidentally apply to comments or
+   other prose. The first letter is rendered very large and brand-tinted
+   for an editorial magazine feel. */
+.article-body > p:first-of-type::first-letter {
+  font-family: 'Inter', ui-serif, Georgia, serif;
+  float: left;
+  font-size: 4.4em;
+  line-height: 0.85;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem 0 0;
+  margin-top: 0.4rem;
+  color: hsl(var(--brand));
+}
+
+/* Article headings get a subtle brand "anchor mark" before them so the
+   visual hierarchy reads like a polished long-form article.
+   Anchor-link offset is handled globally via `html { scroll-padding-top }`
+   above — no per-element scroll-margin needed here. */
+.article-body h2::before {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 4px;
+  background: linear-gradient(to right, hsl(var(--brand)), transparent);
+  border-radius: 9999px;
+  margin-bottom: 0.6rem;
+}
+
+/* ── Reading progress bar polish ──────────────────────────────────────
+   The brand-green fill carries a slow, diagonally-moving shimmer for a
+   subtle "alive" feel. The comet head at the leading edge breathes once
+   per ~1.4s — strong enough to draw the eye when scanning for progress. */
+.rp-fill {
+  overflow: hidden;
+}
+.rp-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: rp-shimmer 2.6s linear infinite;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+@keyframes rp-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.rp-comet {
+  animation: rp-comet-pulse 1.4s ease-in-out infinite;
+}
+@keyframes rp-comet-pulse {
+  0%, 100% {
+    transform: translateY(-50%) scale(1);
+    box-shadow: 0 0 0 3px hsl(var(--brand) / 0.45), 0 0 12px hsl(var(--brand) / 0.6);
+  }
+  50% {
+    transform: translateY(-50%) scale(1.25);
+    box-shadow: 0 0 0 5px hsl(var(--brand) / 0.25), 0 0 22px hsl(var(--brand) / 0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-fill::after, .rp-comet { animation: none !important; }
+}
+
+/* ── End-of-feed glass CTA ─────────────────────────────────────────────
+   A slim frosted-glass strip with:
+     - a rotating brand-green border ring (.cta-glass-ring)
+     - a shine sweep that fires on hover (.cta-glass-shine)
+   The ring uses the `mask-composite: exclude` trick to render only the
+   1px outline of a conic-gradient, giving it that "lit edge" look. */
+.cta-glass {
+  /* Soft drop shadow tinted brand-green */
+  box-shadow:
+    0 8px 30px -12px rgba(16, 185, 129, 0.30),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+}
+
+.cta-glass-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from 0deg,
+    hsl(var(--brand) / 0.0) 0deg,
+    hsl(var(--brand) / 0.9) 90deg,
+    hsl(var(--brand) / 0.0) 200deg,
+    hsl(var(--brand) / 0.6) 290deg,
+    hsl(var(--brand) / 0.0) 360deg
+  );
+  /* Show only the 1.5px border, not the inner fill */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+  animation: cta-ring-spin 7s linear infinite;
+}
+@keyframes cta-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+.cta-glass-shine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 120px;
+  left: -140px;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  filter: blur(6px);
+  pointer-events: none;
+  transition: left 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.group:hover .cta-glass-shine,
+.cta-glass:focus-within .cta-glass-shine {
+  left: calc(100% + 140px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-glass-ring { animation: none !important; }
+  .cta-glass-shine { transition: none !important; }
+}
+
+/* ── Notification bell shake ───────────────────────────────────────
+   Quick attention-grabbing wobble fired briefly when a new
+   notification arrives. The classes stays for ~800ms (matching the
+   timeout in NotificationBell.tsx). */
+.wi-bell-shake { animation: wi-bell-shake 0.7s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; transform-origin: top center; }
+@keyframes wi-bell-shake {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(-14deg); }
+  20%  { transform: rotate(12deg); }
+  30%  { transform: rotate(-10deg); }
+  40%  { transform: rotate(8deg); }
+  50%  { transform: rotate(-6deg); }
+  60%  { transform: rotate(4deg); }
+  70%  { transform: rotate(-2deg); }
+  100% { transform: rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wi-bell-shake { animation: none !important; }
+}
+
+/* ── Profile page polish ───────────────────────────────────────────
+   Drifting brand-tinted gradient in the hero banner and a breathing
+   glow ring on the avatar. Both fully CSS — no JS needed. */
+.profile-drift {
+  background:
+    radial-gradient(ellipse 40% 60% at 25% 30%, hsl(var(--brand) / 0.30), transparent 60%),
+    radial-gradient(ellipse 40% 60% at 75% 70%, hsl(160 80% 60% / 0.30), transparent 60%);
+  background-size: 200% 200%;
+  animation: profile-drift 14s ease-in-out infinite;
+}
+@keyframes profile-drift {
+  0%, 100% { background-position: 0% 0%, 100% 100%; }
+  50%      { background-position: 100% 50%, 0% 50%; }
+}
+
+.profile-avatar-ring {
+  position: relative;
+  animation: profile-avatar-pulse 4s ease-in-out infinite;
+}
+@keyframes profile-avatar-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0px hsl(var(--brand) / 0.4)); }
+  50%      { filter: drop-shadow(0 0 18px hsl(var(--brand) / 0.55)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-drift,
+  .profile-avatar-ring { animation: none !important; }
+}
+
+/* ── Feed search halo ───────────────────────────────────────────────
+   Soft brand-tinted glow that wraps the search bar so it stands out
+   against the feed header. Two layered radial blurs give the bar a
+   "lit" look that intensifies on focus. */
+.feed-search-halo::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background:
+    radial-gradient(ellipse 60% 80% at 20% 50%, hsl(var(--brand) / 0.20), transparent 70%),
+    radial-gradient(ellipse 60% 80% at 80% 50%, hsl(var(--brand) / 0.15), transparent 70%);
+  filter: blur(8px);
+  z-index: -1;
+  opacity: 0.85;
+  transition: opacity 250ms ease, inset 250ms ease;
+  pointer-events: none;
+}
+.feed-search-halo-active::before {
+  inset: -10px;
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 60% 80% at 20% 50%, hsl(var(--brand) / 0.35), transparent 70%),
+    radial-gradient(ellipse 60% 80% at 80% 50%, hsl(var(--brand) / 0.30), transparent 70%);
+}
+
+/* ── Tippy.js popovers (slash menu, mention dropdown, etc.) ─────────────
+   Tippy ships a default theme that paints its own background, border, and
+   shadow on `.tippy-box`. Our inner React components already render their
+   own card chrome, which produced a doubled border. Strip Tippy's box so
+   only the inner component is visible. */
+.tippy-box {
+  background-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.tippy-box[data-theme] {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.tippy-content {
+  padding: 0 !important;
+}
+.tippy-arrow {
+  display: none !important;
+}

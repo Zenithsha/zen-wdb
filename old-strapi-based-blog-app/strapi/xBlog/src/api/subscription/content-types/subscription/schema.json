@@ -1,0 +1,34 @@
+{
+  "kind": "collectionType",
+  "collectionName": "subscriptions",
+  "info": {
+    "singularName": "subscription",
+    "pluralName": "subscriptions",
+    "displayName": "Subscription",
+    "description": "Email subscriptions for weekly digest or specific tags"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "subscriptionType": {
+      "type": "enumeration",
+      "enum": ["weekly_digest", "tag"],
+      "required": true
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "tag": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tag.tag"
+    }
+  }
+}
